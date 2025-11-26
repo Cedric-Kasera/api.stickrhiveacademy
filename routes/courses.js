@@ -19,9 +19,9 @@ router.get('/', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation errors', 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
       });
     }
 
@@ -31,15 +31,15 @@ router.get('/', [
 
     // Build filter object - Remove isApproved requirement for now
     let filter = { isActive: true };
-    
+
     if (req.query.category) {
       filter.category = req.query.category;
     }
-    
+
     if (req.query.level) {
       filter.level = req.query.level;
     }
-    
+
     if (req.query.search) {
       filter.$or = [
         { title: { $regex: req.query.search, $options: 'i' } },
@@ -103,8 +103,9 @@ router.get('/:id', async (req, res) => {
 // @access  Private (Instructor only)
 router.post('/', [
   auth,
-  authorize('instructor'), // Removed 'admin' - only instructors can create courses
+  authorize('instructor'),
   checkApproval,
+
   body('title').trim().notEmpty().withMessage('Course title is required'),
   body('description').trim().notEmpty().withMessage('Course description is required'),
   body('courseCode').trim().notEmpty().withMessage('Course code is required'),
@@ -112,33 +113,78 @@ router.post('/', [
   body('maxStudents').isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
   body('fees').isFloat({ min: 0 }).withMessage('Fees must be a positive number'),
   body('category').notEmpty().withMessage('Category is required'),
-  body('level').isIn(['Beginner', 'Intermediate', 'Advanced']).withMessage('Invalid level')
-  // Removed duration validation - now optional
+  body('level').isIn(['Beginner', 'Intermediate', 'Advanced']).withMessage('Invalid level'),
+
+  // MODULE VALIDATION
+  body('modules').optional().isArray().withMessage('Modules must be an array'),
+
+  // Validate each module
+  body('modules.*.title')
+    .notEmpty()
+    .withMessage('Module title is required'),
+
+  body('modules.*.description')
+    .optional()
+    .isString()
+    .withMessage('Module description must be a string'),
+
+  body('modules.*.order')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Module order must be a positive integer'),
+
+  // Validate lectures inside each module
+  body('modules.*.lectures')
+    .optional()
+    .isArray()
+    .withMessage('Lectures must be an array'),
+
+  body('modules.*.lectures.*.title')
+    .notEmpty()
+    .withMessage('Lecture title is required'),
+
+  body('modules.*.lectures.*.duration')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Lecture duration must be a positive number'),
+
+  body('modules.*.lectures.*.type')
+    .optional()
+    .isIn(['video', 'pdf', 'note', 'quiz', 'assignment'])
+    .withMessage('Invalid lecture type'),
+
+  body('modules.*.lectures.*.isPreview')
+    .optional()
+    .isBoolean()
+    .withMessage('isPreview must be true or false')
+
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation errors', 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
       });
     }
 
-    // Check if course code already exists
-    const existingCourse = await Course.findOne({ 
-      courseCode: req.body.courseCode.toUpperCase() 
+    console.log('Creating course with data:', req.body);
+
+    // Check duplicate course code
+    const existingCourse = await Course.findOne({
+      courseCode: req.body.courseCode.toUpperCase()
     });
-    
+
     if (existingCourse) {
       return res.status(400).json({ message: 'Course code already exists' });
     }
 
-    // Create course
+    // Build course data
     const courseData = {
       ...req.body,
       instructor: req.user._id,
       courseCode: req.body.courseCode.toUpperCase(),
-      isApproved: false // Courses always need admin approval
+      isApproved: false
     };
 
     const course = new Course(courseData);
@@ -150,9 +196,130 @@ router.post('/', [
       message: 'Course created successfully. Pending admin approval.',
       course
     });
+
   } catch (error) {
     console.error('Create course error:', error);
     res.status(500).json({ message: 'Server error while creating course' });
+  }
+});
+
+// @route   PUT /api/courses/:id
+// @desc    Update an existing course
+// @access  Private (Instructor only)
+
+router.put('/:id', [
+  auth,
+  authorize('instructor'),
+  checkApproval,
+  // Basic validations
+  body('title').optional().trim().notEmpty().withMessage('Course title cannot be empty'),
+  body('description').optional().trim().notEmpty().withMessage('Course description cannot be empty'),
+  body('credits').optional().isInt({ min: 1, max: 10 }).withMessage('Credits must be between 1 and 10'),
+  body('maxStudents').optional().isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
+  body('fees').optional().isFloat({ min: 0 }).withMessage('Fees must be a positive number'),
+  body('category').optional().notEmpty().withMessage('Category cannot be empty'),
+  body('level').optional().isIn(['Beginner', 'Intermediate', 'Advanced']).withMessage('Invalid level'),
+
+  // MODULE VALIDATION
+  body('modules').optional().isArray().withMessage('Modules must be an array'),
+
+  body('modules.*.title')
+    .optional()
+    .notEmpty()
+    .withMessage('Module title cannot be empty'),
+
+  body('modules.*.description')
+    .optional()
+    .isString()
+    .withMessage('Module description must be a string'),
+
+  body('modules.*.order')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Module order must be a positive integer'),
+
+  // LECTURE VALIDATION
+  body('modules.*.lectures')
+    .optional()
+    .isArray()
+    .withMessage('Lectures must be an array'),
+
+  body('modules.*.lectures.*.title')
+    .optional()
+    .notEmpty()
+    .withMessage('Lecture title cannot be empty'),
+
+  body('modules.*.lectures.*.duration')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Lecture duration must be a positive number'),
+
+  body('modules.*.lectures.*.type')
+    .optional()
+    .isIn(['video', 'pdf', 'note', 'quiz', 'assignment'])
+    .withMessage('Invalid lecture type'),
+
+  body('modules.*.lectures.*.isPreview')
+    .optional()
+    .isBoolean()
+    .withMessage('isPreview must be true or false'),
+
+], async (req, res) => {
+  try {
+    // Validate fields
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    const courseId = req.params.id;
+
+    // Fetch course
+    const course = await Course.findById(courseId);
+
+    // If course does not exist
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Ensure only the course creator can edit it
+    if (course.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: 'Unauthorized. Only the course creator can update this course.'
+      });
+    }
+
+    // Log update activity
+    console.log('Updating course:', courseId);
+    console.log('Update Data:', req.body);
+
+    // Update fields dynamically
+    Object.keys(req.body).forEach(key => {
+      if (key !== 'courseCode') {
+        // courseCode must NEVER be editable after creation
+        course[key] = req.body[key];
+      }
+    });
+
+    // Any update resets approval — admin must re-approve changes
+    course.isApproved = false;
+
+    // Save updates
+    await course.save();
+
+    await course.populate('instructor', 'firstName lastName email');
+
+    res.status(200).json({
+      message: 'Course updated successfully. Pending admin approval.',
+      course
+    });
+
+  } catch (error) {
+    console.error('Update course error:', error);
+    res.status(500).json({ message: 'Server error while updating course' });
   }
 });
 
@@ -166,12 +333,12 @@ router.get('/instructor/:instructorId', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const courses = await Course.find({ 
+    const courses = await Course.find({
       instructor: req.params.instructorId,
-      isActive: true 
+      isActive: true
     })
-    .populate('instructor', 'firstName lastName email')
-    .sort({ createdAt: -1 });
+      .populate('instructor', 'firstName lastName email')
+      .sort({ createdAt: -1 });
 
     res.json(courses);
   } catch (error) {
@@ -184,7 +351,7 @@ router.get('/instructor/:instructorId', auth, async (req, res) => {
 // @desc    Add material to a course
 // @access  Private
 router.post('/:id/material', [
-  auth, 
+  auth,
   authorize('instructor', 'admin'),
   body('title').notEmpty().withMessage('Title is required'),
   body('type').isIn(['pdf', 'video', 'link', 'document', 'note']).withMessage('Invalid material type'),
@@ -194,9 +361,9 @@ router.post('/:id/material', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation errors', 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
       });
     }
 
@@ -244,7 +411,7 @@ router.post('/:id/material', [
 // @desc    Update a course material
 // @access  Private
 router.put('/:id/material/:materialId', [
-  auth, 
+  auth,
   authorize('instructor', 'admin'),
   body('title').optional().notEmpty().withMessage('Title cannot be empty'),
   body('type').optional().isIn(['pdf', 'video', 'link', 'document', 'note']).withMessage('Invalid material type'),
@@ -254,9 +421,9 @@ router.put('/:id/material/:materialId', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation errors', 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
       });
     }
 
@@ -359,12 +526,12 @@ router.put('/:id/approve', [auth, authorize('admin')], async (req, res) => {
 // @access  Private (Admin only)
 router.get('/pending', [auth, authorize('admin')], async (req, res) => {
   try {
-    const pendingCourses = await Course.find({ 
+    const pendingCourses = await Course.find({
       isApproved: false,
-      isActive: true 
+      isActive: true
     })
-    .populate('instructor', 'firstName lastName email')
-    .sort({ createdAt: -1 });
+      .populate('instructor', 'firstName lastName email')
+      .sort({ createdAt: -1 });
 
     res.json(pendingCourses);
   } catch (error) {
@@ -382,32 +549,32 @@ router.get('/:id/performance', [auth, authorize(['instructor', 'admin'])], async
     const Assignment = require('../models/Assignment');
     const Submission = require('../models/Submission');
     const Grade = require('../models/Grade');
-    
+
     // Verify course exists and user has access
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
-    
+
     // Check if user is instructor of this course or admin
     if (req.user.role !== 'admin' && course.instructor.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     // Get all enrollments for this course
-    const enrollments = await Enrollment.find({ 
-      course: courseId, 
-      status: 'enrolled' 
+    const enrollments = await Enrollment.find({
+      course: courseId,
+      status: 'enrolled'
     }).populate('student', 'firstName lastName');
 
     const totalStudents = enrollments.length;
-    
+
     // Get all assignments for this course
-    const assignments = await Assignment.find({ 
-      course: courseId, 
-      isPublished: true 
+    const assignments = await Assignment.find({
+      course: courseId,
+      isPublished: true
     });
-    
+
     const totalAssignments = assignments.length;
 
     // Get all submissions for this course
@@ -425,7 +592,7 @@ router.get('/:id/performance', [auth, authorize(['instructor', 'admin'])], async
     let completionRate = 0;
     if (totalStudents > 0 && totalAssignments > 0) {
       const studentCompletions = {};
-      
+
       // Count submissions per student
       submissions.forEach(submission => {
         const studentId = submission.student._id.toString();
@@ -434,11 +601,11 @@ router.get('/:id/performance', [auth, authorize(['instructor', 'admin'])], async
         }
         studentCompletions[studentId]++;
       });
-      
+
       // Count students who completed at least 80% of assignments
       const studentsWithGoodCompletion = Object.values(studentCompletions)
         .filter(count => count >= (totalAssignments * 0.8)).length;
-      
+
       completionRate = (studentsWithGoodCompletion / totalStudents) * 100;
     }
 
@@ -455,7 +622,7 @@ router.get('/:id/performance', [auth, authorize(['instructor', 'admin'])], async
     if (grades.length > 0) {
       const totalPercentage = grades.reduce((sum, grade) => sum + (grade.percentage || 0), 0);
       averageGrade = totalPercentage / grades.length;
-      
+
       // Convert grade to satisfaction score (70-100% maps to 3.0-5.0 satisfaction)
       if (averageGrade >= 70) {
         averageSatisfaction = 3.0 + ((averageGrade - 70) / 30) * 2.0;
@@ -467,16 +634,16 @@ router.get('/:id/performance', [auth, authorize(['instructor', 'admin'])], async
 
     // Calculate assignment statistics
     const assignmentStats = assignments.map(assignment => {
-      const assignmentSubmissions = submissions.filter(s => 
+      const assignmentSubmissions = submissions.filter(s =>
         s.assignment._id.toString() === assignment._id.toString()
       );
-      
+
       return {
         assignmentId: assignment._id,
         title: assignment.title,
         totalSubmissions: assignmentSubmissions.length,
         submissionRate: totalStudents > 0 ? (assignmentSubmissions.length / totalStudents) * 100 : 0,
-        averageGrade: assignmentSubmissions.length > 0 
+        averageGrade: assignmentSubmissions.length > 0
           ? assignmentSubmissions.reduce((sum, s) => sum + (s.grade?.percentage || 0), 0) / assignmentSubmissions.length
           : 0
       };
@@ -485,8 +652,8 @@ router.get('/:id/performance', [auth, authorize(['instructor', 'admin'])], async
     // Recent activity (last 7 days)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    const recentSubmissions = submissions.filter(s => 
+
+    const recentSubmissions = submissions.filter(s =>
       new Date(s.submittedAt) >= sevenDaysAgo
     ).length;
 
@@ -496,22 +663,22 @@ router.get('/:id/performance', [auth, authorize(['instructor', 'admin'])], async
       totalStudents,
       totalAssignments,
       totalSubmissions: submissions.length,
-      
+
       // Key metrics
       completionRate: Math.round(completionRate * 100) / 100,
       submissionRate: Math.round(submissionRate * 100) / 100,
       averageGrade: Math.round(averageGrade * 100) / 100,
       averageSatisfaction: Math.round(averageSatisfaction * 100) / 100,
-      
+
       // Detailed stats
       assignmentStats,
       recentActivity: {
         recentSubmissions,
-        newEnrollments: enrollments.filter(e => 
+        newEnrollments: enrollments.filter(e =>
           new Date(e.enrollmentDate) >= sevenDaysAgo
         ).length
       },
-      
+
       // Grade distribution
       gradeDistribution: {
         'A': grades.filter(g => g.letterGrade && g.letterGrade.startsWith('A')).length,

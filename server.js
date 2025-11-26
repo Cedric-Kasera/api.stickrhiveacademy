@@ -23,10 +23,10 @@ const uploadRoutes = require('./routes/upload');
 
 const app = express();
 
-console.log("CLIENT_URL:", process.env.CLIENT_URL);
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  // Allow both origins
+  origin: process.env.CLIENT_URL || 'https://stickrhive-academy.vercel.app',
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));

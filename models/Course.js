@@ -1,5 +1,73 @@
 const mongoose = require('mongoose');
 
+// ---------------------------------------------
+// Lecture Subschema
+// ---------------------------------------------
+const lectureSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Lecture title is required'],
+    trim: true
+  },
+  duration: {
+    type: Number,
+    required: [true, 'Lecture duration is required']
+  },
+  type: {
+    type: String,
+    enum: ['video', 'live'],
+    default: 'video',
+    required: true
+  },
+  videoSource: {
+    type: String,
+    enum: ['upload', 'youtube', 'vimeo', 'url', 'link'],
+    default: 'upload'
+  },
+  videoUrl: {
+    type: String,
+    default: ''
+  },
+  liveType: {
+    type: String,
+    enum: ['zoom', 'google-meet', 'teams', 'other'],
+    default: 'zoom'
+  },
+  liveLink: {
+    type: String,
+    default: ''
+  },
+  isFreePreview: {
+    type: Boolean,
+    default: false
+  }
+}, { _id: true, timestamps: true });
+
+
+// ---------------------------------------------
+// Module Subschema
+// ---------------------------------------------
+const moduleSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Module title is required'],
+    trim: true
+  },
+  description: {
+    type: String,
+    default: ''
+  },
+  lectures: {
+    type: [lectureSchema],
+    default: []
+  }
+}, { _id: true, timestamps: true });
+
+
+
+// ---------------------------------------------
+// Course Schema
+// ---------------------------------------------
 const courseSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -73,6 +141,15 @@ const courseSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+
+  // ---------------------------------------------
+  // Modules + Lectures
+  // ---------------------------------------------
+  modules: {
+    type: [moduleSchema],
+    default: []
+  },
+
   isActive: {
     type: Boolean,
     default: true
@@ -89,6 +166,7 @@ const courseSchema = new mongoose.Schema({
   timestamps: true
 });
 
+
 // Indexes for better performance
 courseSchema.index({ courseCode: 1 });
 courseSchema.index({ instructor: 1 });
@@ -96,10 +174,8 @@ courseSchema.index({ category: 1 });
 courseSchema.index({ isActive: 1, isApproved: 1 });
 
 // Virtual for enrollment status
-courseSchema.virtual('isFullyEnrolled').get(function() {
+courseSchema.virtual('isFullyEnrolled').get(function () {
   return this.currentEnrollment >= this.maxStudents;
 });
-
-// Removed duration validation since we removed duration fields
 
 module.exports = mongoose.model('Course', courseSchema);
