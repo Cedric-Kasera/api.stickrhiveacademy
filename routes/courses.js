@@ -200,7 +200,7 @@ router.post('/', [
       'system',
       {
         targetId: course._id,
-        targetUrl: `/admin/courses/${course._id}`,
+        targetUrl: `/courses/${course._id}`,
         actionRequired: true
       }
     );
