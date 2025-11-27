@@ -68,13 +68,33 @@ router.post('/', [
       return res.status(400).json({ message: 'Course is full' });
     }
 
-    // Create enrollment
-    const enrollment = new Enrollment({
-      student: req.user._id,
-      course: courseId
-    });
+    let enrollment;
 
-    await enrollment.save();
+    // If student previously dropped, update existing enrollment
+    if (existingEnrollment && existingEnrollment.status === 'dropped') {
+      existingEnrollment.status = 'enrolled';
+      existingEnrollment.enrollmentDate = Date.now();
+      existingEnrollment.finalGrade = {
+        letterGrade: undefined,
+        percentage: undefined,
+        gpa: undefined,
+        isFinalized: false
+      };
+      existingEnrollment.attendance = {
+        totalClasses: 0,
+        attendedClasses: 0,
+        attendancePercentage: 0
+      };
+      await existingEnrollment.save();
+      enrollment = existingEnrollment;
+    } else {
+      // Create new enrollment
+      enrollment = new Enrollment({
+        student: req.user._id,
+        course: courseId
+      });
+      await enrollment.save();
+    }
 
     // Update course enrollment count
     await Course.findByIdAndUpdate(courseId, {
