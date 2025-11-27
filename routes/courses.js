@@ -150,7 +150,7 @@ router.post('/', [
 
   body('modules.*.lectures.*.type')
     .optional()
-    .isIn(['video', 'pdf', 'note', 'quiz', 'assignment'])
+    .isIn(['video', 'pdf', 'note', 'quiz', 'assignment', 'live'])
     .withMessage('Invalid lecture type'),
 
   body('modules.*.lectures.*.isPreview')

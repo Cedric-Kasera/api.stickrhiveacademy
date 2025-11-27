@@ -20,6 +20,7 @@ const messageRoutes = require('./routes/messages');
 const notificationRoutes = require('./routes/notifications');
 const analyticsRoutes = require('./routes/analytics');
 const uploadRoutes = require('./routes/upload');
+const progressRoutes = require('./routes/progress');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/progress', progressRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
