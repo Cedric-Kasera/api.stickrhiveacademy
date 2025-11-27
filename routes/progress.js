@@ -126,7 +126,7 @@ router.get('/course/:courseId', [
             const enrollment = await Enrollment.findOne({
                 student: userId,
                 course: courseId,
-                status: 'active'
+                status: 'enrolled'
             });
 
             if (!enrollment) {
@@ -181,7 +181,7 @@ router.post('/lecture/:courseId/:moduleId/:lectureId/toggle', [
         const enrollment = await Enrollment.findOne({
             student: userId,
             course: courseId,
-            status: 'active'
+            status: 'enrolled'
         });
 
         if (!enrollment) {
@@ -415,7 +415,7 @@ router.post('/initialize/:courseId', [
         const enrollment = await Enrollment.findOne({
             student: userId,
             course: courseId,
-            status: 'active'
+            status: 'enrolled'
         });
 
         if (!enrollment) {
