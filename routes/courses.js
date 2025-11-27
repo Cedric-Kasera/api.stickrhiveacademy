@@ -531,7 +531,7 @@ router.put('/:id/approve', [auth, authorize('admin')], async (req, res) => {
       message: `Your course "${course.title}" (${course.courseCode}) has been approved and is now active.`,
       type: 'course_approved',
       targetId: course._id,
-      targetUrl: `/instructor/courses/${course._id}`,
+      targetUrl: `/courses/${course._id}`,
       actionRequired: false
     });
 
