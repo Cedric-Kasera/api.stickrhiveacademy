@@ -455,11 +455,11 @@ router.post('/initialize/:courseId', [
 });
 
 // @route   DELETE /api/progress/course/:courseId
-// @desc    Reset progress for a course (admin only)
+// @desc    Reset progress for a course (admin and also when students unenrolls)
 // @access  Private (Admin)
 router.delete('/course/:courseId', [
     auth,
-    authorize('admin'),
+    authorize('admin', 'student'),
     param('courseId').isMongoId().withMessage('Invalid course ID')
 ], async (req, res) => {
     try {

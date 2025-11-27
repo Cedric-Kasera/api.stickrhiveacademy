@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const Course = require('../models/Course');
 const Enrollment = require('../models/Enrollment');
+const Notification = require('../models/Notification');
 const { auth, authorize, checkApproval } = require('../middleware/auth');
 
 const router = express.Router();
@@ -191,6 +192,18 @@ router.post('/', [
     await course.save();
 
     await course.populate('instructor', 'firstName lastName email');
+
+    // Notify all admins about new course pending approval
+    await Notification.notifyAdmins(
+      'New Course Pending Approval',
+      `Instructor ${req.user.firstName} ${req.user.lastName} has created a new course "${course.title}" (${course.courseCode}) awaiting approval.`,
+      'system',
+      {
+        targetId: course._id,
+        targetUrl: `/admin/courses/${course._id}`,
+        actionRequired: true
+      }
+    );
 
     res.status(201).json({
       message: 'Course created successfully. Pending admin approval.',
@@ -510,6 +523,17 @@ router.put('/:id/approve', [auth, authorize('admin')], async (req, res) => {
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
+
+    // Notify the instructor that their course has been approved
+    await Notification.createNotification({
+      recipient: course.instructor._id,
+      title: 'Course Approved',
+      message: `Your course "${course.title}" (${course.courseCode}) has been approved and is now active.`,
+      type: 'course_approved',
+      targetId: course._id,
+      targetUrl: `/instructor/courses/${course._id}`,
+      actionRequired: false
+    });
 
     res.json({
       message: 'Course approved successfully',
