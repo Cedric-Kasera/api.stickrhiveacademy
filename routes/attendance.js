@@ -21,9 +21,9 @@ router.post('/', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation errors', 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
       });
     }
 
@@ -61,8 +61,8 @@ router.post('/', [
     for (const studentAttendance of students) {
       await Enrollment.findOneAndUpdate(
         { student: studentAttendance.student, course: courseId },
-        { 
-          $inc: { 
+        {
+          $inc: {
             'attendance.totalClasses': 1,
             'attendance.attendedClasses': studentAttendance.status === 'present' ? 1 : 0
           }
@@ -121,7 +121,27 @@ router.get('/student/:studentId', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json([]);
+    const attendanceRecords = await Attendance.find({
+      'students.student': req.params.studentId
+    })
+      .populate('course', 'title courseCode')
+      .populate('instructor', 'firstName lastName')
+      .sort({ date: -1 });
+
+    // Filter to only include the specific student's attendance data
+    const studentAttendance = attendanceRecords.map(record => ({
+      _id: record._id,
+      course: record.course,
+      date: record.date,
+      instructor: record.instructor,
+      classType: record.classType,
+      topic: record.topic,
+      duration: record.duration,
+      status: record.students.find(s => s.student.toString() === req.params.studentId)?.status,
+      remarks: record.students.find(s => s.student.toString() === req.params.studentId)?.remarks
+    }));
+
+    res.json(studentAttendance);
   } catch (error) {
     console.error('Get student attendance error:', error);
     res.status(500).json({ message: 'Server error while fetching student attendance' });

@@ -456,7 +456,7 @@ router.post('/initialize/:courseId', [
 
 // @route   DELETE /api/progress/course/:courseId
 // @desc    Reset progress for a course (admin and also when students unenrolls)
-// @access  Private (Admin)
+// @access  Private (Admin and student themselves)
 router.delete('/course/:courseId', [
     auth,
     authorize('admin', 'student'),
