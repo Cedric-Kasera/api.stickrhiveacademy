@@ -6,6 +6,33 @@ const Enrollment = require('../models/Enrollment');
 const { auth, authorize, checkApproval } = require('../middleware/auth');
 
 const router = express.Router();
+// =====================================================
+// HELPER FUNCTIONS
+// =====================================================
+
+// Helper function to calculate and update attendance percentage
+const updateAttendancePercentage = async (studentId, courseId, status) => {
+  const enrollment = await Enrollment.findOneAndUpdate(
+    { student: studentId, course: courseId },
+    {
+      $inc: {
+        'attendance.totalClasses': 1,
+        'attendance.attendedClasses': status === 'present' ? 1 : 0
+      }
+    },
+    { new: true }
+  );
+
+  if (enrollment) {
+    const percentage = enrollment.attendance.totalClasses > 0
+      ? (enrollment.attendance.attendedClasses / enrollment.attendance.totalClasses) * 100
+      : 0;
+
+    await Enrollment.findByIdAndUpdate(enrollment._id, {
+      'attendance.attendancePercentage': percentage
+    });
+  }
+};
 
 // @route   POST /api/attendance
 // @desc    Mark attendance for a class
@@ -59,15 +86,7 @@ router.post('/', [
 
     // Update enrollment attendance counts
     for (const studentAttendance of students) {
-      await Enrollment.findOneAndUpdate(
-        { student: studentAttendance.student, course: courseId },
-        {
-          $inc: {
-            'attendance.totalClasses': 1,
-            'attendance.attendedClasses': studentAttendance.status === 'present' ? 1 : 0
-          }
-        }
-      );
+      await updateAttendancePercentage(studentAttendance.student, courseId, studentAttendance.status);
     }
 
     await attendance.populate([
