@@ -77,7 +77,21 @@ router.post('/', [
       });
     }
 
-    const { title, description, courseId, type, totalPoints, dueDate, isPublished, allowLateSubmission, latePenalty } = req.body;
+    const {
+      title,
+      description,
+      courseId,
+      type,
+      totalPoints,
+      dueDate,
+      isPublished,
+      allowLateSubmission,
+      latePenalty,
+      publishDate,
+      rubric,
+      quizSettings,
+      questions
+    } = req.body;
 
     console.log('Assignment creation request received:', req.body); // Debug log
 
@@ -99,7 +113,7 @@ router.post('/', [
 
     console.log('Creating assignment with due date:', parsedDueDate.toISOString()); // Debug log
 
-    const assignment = new Assignment({
+    const assignmentData = {
       title,
       description,
       course: courseId,
@@ -110,7 +124,26 @@ router.post('/', [
       isPublished: isPublished || false,
       allowLateSubmission: allowLateSubmission !== undefined ? allowLateSubmission : true,
       latePenalty: latePenalty || 0
-    });
+    };
+
+    // Add optional fields if provided
+    if (publishDate) {
+      assignmentData.publishDate = new Date(publishDate);
+    }
+
+    if (rubric && Array.isArray(rubric)) {
+      assignmentData.rubric = rubric;
+    }
+
+    if (quizSettings) {
+      assignmentData.quizSettings = quizSettings;
+    }
+
+    if (questions && Array.isArray(questions)) {
+      assignmentData.questions = questions;
+    }
+
+    const assignment = new Assignment(assignmentData);
 
     await assignment.save();
 
@@ -214,9 +247,28 @@ router.put('/:id', [
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Prepare update data - only include fields that are provided
+    const updateData = {};
+
+    // Basic fields
+    if (req.body.title !== undefined) updateData.title = req.body.title;
+    if (req.body.description !== undefined) updateData.description = req.body.description;
+    if (req.body.type !== undefined) updateData.type = req.body.type;
+    if (req.body.totalPoints !== undefined) updateData.totalPoints = req.body.totalPoints;
+    if (req.body.dueDate !== undefined) updateData.dueDate = new Date(req.body.dueDate);
+    if (req.body.isPublished !== undefined) updateData.isPublished = req.body.isPublished;
+    if (req.body.allowLateSubmission !== undefined) updateData.allowLateSubmission = req.body.allowLateSubmission;
+    if (req.body.latePenalty !== undefined) updateData.latePenalty = req.body.latePenalty;
+
+    // New schema fields
+    if (req.body.publishDate !== undefined) updateData.publishDate = new Date(req.body.publishDate);
+    if (req.body.rubric !== undefined) updateData.rubric = req.body.rubric;
+    if (req.body.quizSettings !== undefined) updateData.quizSettings = req.body.quizSettings;
+    if (req.body.questions !== undefined) updateData.questions = req.body.questions;
+
     const updatedAssignment = await Assignment.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     ).populate([
       { path: 'course', select: 'title courseCode' },
@@ -230,6 +282,263 @@ router.put('/:id', [
   } catch (error) {
     console.error('Update assignment error:', error);
     res.status(500).json({ message: 'Server error while updating assignment' });
+  }
+});
+
+// @route   POST /api/assignments/:id/questions
+// @desc    Add a question to an assignment
+// @access  Private (Instructor only)
+router.post('/:id/questions', [
+  auth,
+  authorize('instructor', 'admin'),
+  checkApproval,
+  body('questionText').trim().notEmpty().withMessage('Question text is required'),
+  body('type').isIn(['multiple-choice', 'written']).withMessage('Invalid question type'),
+  body('points').optional().isInt({ min: 1 }).withMessage('Points must be at least 1')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    const assignment = await Assignment.findById(req.params.id);
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    // Check if instructor owns this assignment
+    if (req.user.role !== 'admin' && assignment.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const { questionText, type, options, correctOption, expectedAnswer, points, explanation, difficulty, tags } = req.body;
+
+    // Validate MCQ-specific fields
+    if (type === 'multiple-choice') {
+      if (!options || !Array.isArray(options) || options.length < 2) {
+        return res.status(400).json({ message: 'MCQ questions must have at least 2 options' });
+      }
+      if (correctOption === undefined || correctOption < 0 || correctOption >= options.length) {
+        return res.status(400).json({ message: 'Invalid correct option index' });
+      }
+    }
+
+    // Validate written question fields
+    if (type === 'written' && !expectedAnswer) {
+      return res.status(400).json({ message: 'Written questions must have an expected answer' });
+    }
+
+    const newQuestion = {
+      questionText,
+      type,
+      points: points || 1,
+      explanation,
+      difficulty: difficulty || 'easy',
+      tags: tags || []
+    };
+
+    if (type === 'multiple-choice') {
+      newQuestion.options = options;
+      newQuestion.correctOption = correctOption;
+    } else {
+      newQuestion.expectedAnswer = expectedAnswer;
+    }
+
+    assignment.questions.push(newQuestion);
+    await assignment.save();
+
+    res.status(201).json({
+      message: 'Question added successfully',
+      question: assignment.questions[assignment.questions.length - 1]
+    });
+  } catch (error) {
+    console.error('Add question error:', error);
+    res.status(500).json({ message: 'Server error while adding question' });
+  }
+});
+
+// @route   PUT /api/assignments/:id/questions/:questionId
+// @desc    Update a specific question in an assignment
+// @access  Private (Instructor only)
+router.put('/:id/questions/:questionId', [
+  auth,
+  authorize('instructor', 'admin'),
+  checkApproval
+], async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    // Check if instructor owns this assignment
+    if (req.user.role !== 'admin' && assignment.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const question = assignment.questions.id(req.params.questionId);
+
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    // Update question fields
+    const { questionText, type, options, correctOption, expectedAnswer, points, explanation, difficulty, tags } = req.body;
+
+    if (questionText !== undefined) question.questionText = questionText;
+    if (type !== undefined) question.type = type;
+    if (points !== undefined) question.points = points;
+    if (explanation !== undefined) question.explanation = explanation;
+    if (difficulty !== undefined) question.difficulty = difficulty;
+    if (tags !== undefined) question.tags = tags;
+
+    if (type === 'multiple-choice' || question.type === 'multiple-choice') {
+      if (options !== undefined) question.options = options;
+      if (correctOption !== undefined) question.correctOption = correctOption;
+    }
+
+    if (type === 'written' || question.type === 'written') {
+      if (expectedAnswer !== undefined) question.expectedAnswer = expectedAnswer;
+    }
+
+    await assignment.save();
+
+    res.json({
+      message: 'Question updated successfully',
+      question
+    });
+  } catch (error) {
+    console.error('Update question error:', error);
+    res.status(500).json({ message: 'Server error while updating question' });
+  }
+});
+
+// @route   DELETE /api/assignments/:id/questions/:questionId
+// @desc    Delete a specific question from an assignment
+// @access  Private (Instructor only)
+router.delete('/:id/questions/:questionId', [
+  auth,
+  authorize('instructor', 'admin'),
+  checkApproval
+], async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    // Check if instructor owns this assignment
+    if (req.user.role !== 'admin' && assignment.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const question = assignment.questions.id(req.params.questionId);
+
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    question.deleteOne();
+    await assignment.save();
+
+    res.json({ message: 'Question deleted successfully' });
+  } catch (error) {
+    console.error('Delete question error:', error);
+    res.status(500).json({ message: 'Server error while deleting question' });
+  }
+});
+
+// @route   PUT /api/assignments/:id/rubric
+// @desc    Update assignment rubric
+// @access  Private (Instructor only)
+router.put('/:id/rubric', [
+  auth,
+  authorize('instructor', 'admin'),
+  checkApproval,
+  body('rubric').isArray().withMessage('Rubric must be an array'),
+  body('rubric.*.criterion').trim().notEmpty().withMessage('Criterion name is required'),
+  body('rubric.*.value').isNumeric().withMessage('Criterion value must be a number')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    const assignment = await Assignment.findById(req.params.id);
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    // Check if instructor owns this assignment
+    if (req.user.role !== 'admin' && assignment.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    assignment.rubric = req.body.rubric;
+    await assignment.save();
+
+    res.json({
+      message: 'Rubric updated successfully',
+      rubric: assignment.rubric
+    });
+  } catch (error) {
+    console.error('Update rubric error:', error);
+    res.status(500).json({ message: 'Server error while updating rubric' });
+  }
+});
+
+// @route   PUT /api/assignments/:id/quiz-settings
+// @desc    Update quiz settings for an assignment
+// @access  Private (Instructor only)
+router.put('/:id/quiz-settings', [
+  auth,
+  authorize('instructor', 'admin'),
+  checkApproval
+], async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    // Check if instructor owns this assignment
+    if (req.user.role !== 'admin' && assignment.instructor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const { randomizeQuestions, timeLimit, maxAttempts, autoGrade } = req.body;
+
+    if (!assignment.quizSettings) {
+      assignment.quizSettings = {};
+    }
+
+    if (randomizeQuestions !== undefined) assignment.quizSettings.randomizeQuestions = randomizeQuestions;
+    if (timeLimit !== undefined) assignment.quizSettings.timeLimit = timeLimit;
+    if (maxAttempts !== undefined) assignment.quizSettings.maxAttempts = maxAttempts;
+    if (autoGrade !== undefined) assignment.quizSettings.autoGrade = autoGrade;
+
+    await assignment.save();
+
+    res.json({
+      message: 'Quiz settings updated successfully',
+      quizSettings: assignment.quizSettings
+    });
+  } catch (error) {
+    console.error('Update quiz settings error:', error);
+    res.status(500).json({ message: 'Server error while updating quiz settings' });
   }
 });
 
