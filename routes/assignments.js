@@ -7,7 +7,7 @@ const { auth, authorize, checkApproval } = require('../middleware/auth');
 const router = express.Router();
 
 // @route   GET /api/assignments
-// @desc    Get assignments for current user
+// @desc    Get assignments for current user(Student)
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
@@ -90,7 +90,10 @@ router.post('/', [
       publishDate,
       rubric,
       quizSettings,
-      questions
+      questions,
+      submissionType,
+      allowedFileTypes,
+      maxFileSize
     } = req.body;
 
     console.log('Assignment creation request received:', req.body); // Debug log
@@ -141,6 +144,18 @@ router.post('/', [
 
     if (questions && Array.isArray(questions)) {
       assignmentData.questions = questions;
+    }
+
+    if (submissionType) {
+      assignmentData.submissionType = submissionType;
+    }
+
+    if (allowedFileTypes && Array.isArray(allowedFileTypes)) {
+      assignmentData.allowedFileTypes = allowedFileTypes;
+    }
+
+    if (maxFileSize !== undefined) {
+      assignmentData.maxFileSize = maxFileSize;
     }
 
     const assignment = new Assignment(assignmentData);

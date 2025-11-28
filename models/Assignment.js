@@ -155,6 +155,25 @@ const assignmentSchema = new mongoose.Schema({
     default: 0
   },
 
+  // Submission type (file upload, text, or both)
+  submissionType: {
+    type: String,
+    enum: ['file', 'text', 'both'],
+    default: 'text'
+  },
+
+  // Allowed file types for file submissions
+  allowedFileTypes: {
+    type: [String],
+    default: []
+  },
+
+  // Maximum file size in bytes
+  maxFileSize: {
+    type: Number,
+    default: 10485760 // 10MB default
+  },
+
   /* ----------------------------------------------
      GRADING RUBRIC (Instructor-defined)
   ------------------------------------------------*/
