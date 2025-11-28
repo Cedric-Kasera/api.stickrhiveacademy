@@ -12,24 +12,24 @@ const router = express.Router();
 router.get('/', auth, async (req, res) => {
   try {
     let assignments;
-    
+
     if (req.user.role === 'student') {
       // Get assignments from enrolled courses
       const Enrollment = require('../models/Enrollment'); // Fixed: Move require inside function
-      const enrollments = await Enrollment.find({ 
+      const enrollments = await Enrollment.find({
         student: req.user._id,
         status: 'enrolled'
       }).populate('course');
-      
+
       const courseIds = enrollments.map(enrollment => enrollment.course._id);
-      
+
       assignments = await Assignment.find({
         course: { $in: courseIds },
         isPublished: true
       })
-      .populate('course', 'title courseCode')
-      .populate('instructor', 'firstName lastName')
-      .sort({ dueDate: 1 });
+        .populate('course', 'title courseCode')
+        .populate('instructor', 'firstName lastName')
+        .sort({ dueDate: 1 });
     } else {
       // Instructors get their own assignments
       assignments = await Assignment.find({ instructor: req.user._id })
@@ -71,13 +71,15 @@ router.post('/', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation errors', 
-        errors: errors.array() 
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: errors.array()
       });
     }
 
     const { title, description, courseId, type, totalPoints, dueDate, isPublished, allowLateSubmission, latePenalty } = req.body;
+
+    console.log('Assignment creation request received:', req.body); // Debug log
 
     // Verify course exists and instructor owns it
     const course = await Course.findById(courseId);
@@ -121,14 +123,14 @@ router.post('/', [
     if (isPublished) {
       const Enrollment = require('../models/Enrollment');
       const Notification = require('../models/Notification');
-      
+
       const enrolledStudents = await Enrollment.find({
         course: courseId,
         status: 'enrolled'
       }).populate('student');
 
       // Create notifications for all enrolled students
-      const notificationPromises = enrolledStudents.map(enrollment => 
+      const notificationPromises = enrolledStudents.map(enrollment =>
         Notification.createNotification({
           recipient: enrollment.student._id,
           title: 'New Assignment Available',
@@ -162,8 +164,8 @@ router.get('/course/:courseId', auth, async (req, res) => {
       course: req.params.courseId,
       isPublished: true
     })
-    .populate('instructor', 'firstName lastName')
-    .sort({ dueDate: 1 });
+      .populate('instructor', 'firstName lastName')
+      .sort({ dueDate: 1 });
 
     res.json(assignments);
   } catch (error) {
@@ -202,7 +204,7 @@ router.put('/:id', [
 ], async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
-    
+
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
@@ -241,7 +243,7 @@ router.delete('/:id', [
 ], async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
-    
+
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
