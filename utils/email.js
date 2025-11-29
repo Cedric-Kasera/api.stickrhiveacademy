@@ -1,5 +1,8 @@
 const { Resend } = require("resend");
 
+// Load environment variables
+require("dotenv").config();
+
 // Create Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
 

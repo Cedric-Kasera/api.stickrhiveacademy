@@ -351,7 +351,8 @@ router.post(
       if (!user) {
         // Don't reveal if user exists or not for security
         return res.status(200).json({
-          message: "If the email exists, a password reset token has been generated.",
+          message:
+            "If the email exists, a password reset token has been generated.",
         });
       }
 
@@ -363,7 +364,7 @@ router.post(
       // Generate reset token (random 6-digit code or you can use crypto for more security)
       const crypto = require("crypto");
       const resetToken = crypto.randomBytes(32).toString("hex");
-      
+
       // Hash the token before storing
       const hashedToken = crypto
         .createHash("sha256")
@@ -382,7 +383,7 @@ router.post(
           resetToken,
           `${user.firstName} ${user.lastName}`
         );
-        
+
         res.json({
           message: "Password reset link has been sent to your email address.",
           email: user.email,
@@ -391,13 +392,16 @@ router.post(
         console.error("Failed to send email:", emailError);
         // Still return success but inform about email issue
         res.json({
-          message: "Password reset token generated, but email could not be sent. Please contact support.",
+          message:
+            "Password reset token generated, but email could not be sent. Please contact support.",
           resetToken, // Fallback: provide token in response if email fails
         });
       }
     } catch (error) {
       console.error("Password reset request error:", error);
-      res.status(500).json({ message: "Server error during password reset request" });
+      res
+        .status(500)
+        .json({ message: "Server error during password reset request" });
     }
   }
 );
@@ -430,8 +434,8 @@ router.put(
 
       // Check if passwords match
       if (newPassword !== confirmPassword) {
-        return res.status(400).json({ 
-          message: "Passwords do not match" 
+        return res.status(400).json({
+          message: "Passwords do not match",
         });
       }
 
@@ -449,8 +453,8 @@ router.put(
       });
 
       if (!user) {
-        return res.status(400).json({ 
-          message: "Invalid or expired reset token" 
+        return res.status(400).json({
+          message: "Invalid or expired reset token",
         });
       }
 
@@ -460,8 +464,9 @@ router.put(
       user.passwordResetExpires = undefined;
       await user.save();
 
-      res.json({ 
-        message: "Password has been reset successfully. You can now login with your new password." 
+      res.json({
+        message:
+          "Password has been reset successfully. You can now login with your new password.",
       });
     } catch (error) {
       console.error("Password reset error:", error);
@@ -469,10 +474,6 @@ router.put(
     }
   }
 );
-
-// @route   PUT /api/auth/confirm-email
-// @desc    Confirm user email if is valid
-// @access  Private
 
 // @route   POST /api/auth/logout
 // @desc    Logout user (client-side token removal)
