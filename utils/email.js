@@ -3,10 +3,15 @@ const nodemailer = require("nodemailer");
 // Create reusable transporter
 const createTransporter = () => {
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587, // Works best on Render
+    secure: false, // MUST be false for port 587
     auth: {
       user: process.env.EMAIL_USER || "stickrhive@gmail.com",
-      pass: process.env.EMAIL_PASSWORD, // App password from Gmail
+      pass: process.env.EMAIL_PASSWORD, // your App Password
+    },
+    tls: {
+      rejectUnauthorized: false, // prevents SSL issues on Render
     },
   });
 };
