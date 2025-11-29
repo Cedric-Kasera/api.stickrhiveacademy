@@ -1,36 +1,19 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
-// Create reusable transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587, // Works best on Render
-    secure: false, // MUST be false for port 587
-    auth: {
-      user: process.env.EMAIL_USER || "stickrhive@gmail.com",
-      pass: process.env.EMAIL_PASSWORD, // your App Password
-    },
-    tls: {
-      rejectUnauthorized: false, // prevents SSL issues on Render
-    },
-  });
-};
+// Create Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Send password reset email
 const sendPasswordResetEmail = async (email, resetToken, userName) => {
   try {
-    const transporter = createTransporter();
-
-    // Frontend reset URL - adjust this to match your frontend route
+    // Frontend reset URL
     const resetUrl = `${
-      process.env.CLIENT_URL || "https://stickrhive-academy.vercel.app"
+      process.env.CLIENT_URL || "https://stickrhiveacademy.vercel.app"
     }/reset/password?token=${resetToken}`;
 
-    const mailOptions = {
-      from: {
-        name: "Stickrhive Academy",
-        address: process.env.EMAIL_USER || "stickrhive@gmail.com",
-      },
+    // Send email
+    const { data, error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || "no-reply@stickrhive.space",
       to: email,
       subject: "Password Reset Request - Stickrhive Academy",
       html: `
@@ -163,29 +146,22 @@ Password Reset Request - Stickrhive Academy
 
 Hello ${userName || "there"},
 
-We received a request to reset your password for your Stickrhive Academy account. If you didn't make this request, you can safely ignore this email.
-
-To reset your password, please visit the following link:
+Reset your password by visiting:
 ${resetUrl}
 
-This link will expire in 1 hour for security reasons.
+This link expires in 1 hour.
 
-If you're having trouble with the link above, copy and paste it into your web browser.
-
-For security reasons, never share this link with anyone.
-
-Best regards,
-Stickrhive Academy Team
-
----
-This is an automated message, please do not reply to this email.
-© ${new Date().getFullYear()} Stickrhive Academy. All rights reserved.
+- Stickrhive Academy Team
       `,
-    };
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Password reset email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    if (error) {
+      console.error("Error sending email with Resend:", error);
+      throw new Error("Failed to send password reset email");
+    }
+
+    console.log("Password reset email sent:", data.id);
+    return { success: true, messageId: data.id };
   } catch (error) {
     console.error("Error sending password reset email:", error);
     throw new Error("Failed to send password reset email");
