@@ -90,6 +90,11 @@ const assignmentSchema = new mongoose.Schema({
     maxlength: [2000, 'Description cannot exceed 2000 characters']
   },
 
+  instructions: {
+    type: String,
+    maxlength: [5000, 'Instructions cannot exceed 5000 characters']
+  },
+
   // Reference to Course
   course: {
     type: mongoose.Schema.Types.ObjectId,

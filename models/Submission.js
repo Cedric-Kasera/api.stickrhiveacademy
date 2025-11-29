@@ -18,6 +18,28 @@ const submissionSchema = new mongoose.Schema({
     maxlength: [5000, 'Submission text cannot exceed 5000 characters']
   },
 
+  // Quiz/Exam answers with metadata (only for quiz/exam assignments)
+  quizAnswers: [{
+    questionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true
+    },
+    questionText: String,
+    questionType: {
+      type: String,
+      enum: ['multiple-choice', 'written']
+    },
+    options: [String], // For MCQ questions
+    studentAnswer: mongoose.Schema.Types.Mixed, // Can be number (MCQ index) or string (written)
+    correctAnswer: mongoose.Schema.Types.Mixed, // Correct option index or expected answer
+    isCorrect: Boolean, // True if answer is correct (for auto-graded)
+    points: Number, // Points for this question
+    earnedPoints: Number, // Points earned by student
+    explanation: String, // Explanation shown after grading
+    difficulty: String, // Question difficulty level
+    tags: [String] // Question tags for categorization
+  }],
+
   attachments: [{
     originalName: String,
     filename: String,
